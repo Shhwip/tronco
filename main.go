@@ -2,30 +2,26 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"runtime"
+	"time"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
 const (
-	width  = 1920
-	height = 1080
+	width        = 1920
+	height       = 1080
+	numTriangles = 50 // Number of triangles to generate
 )
 
 var (
-	vertices = []uint16{
-		0, 0, // Top-left
-		1920, 0, // Top-right
-		0, 1080, // Bottom-left
-		1920, 0, // Top-right
-		1920, 1080, // Bottom-right
-		0, 1080, // Bottom-left
-	}
-	colors = []uint8{
-		150, 100, 100, // First triangle color
-		255, 200, 200, // Second triangle color
-	}
+	vertices []uint16
+	colors   []uint8
+)
+
+var (
 	vertexShaderSource = `
 		#version 330 core
 		layout (location = 0) in vec2 aPos;
@@ -48,6 +44,7 @@ var (
 
 func init() {
 	runtime.LockOSThread()
+	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
@@ -61,7 +58,7 @@ func main() {
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 
-	window, err := glfw.CreateWindow(width, height, "OpenGL Triangles", nil, nil)
+	window, err := glfw.CreateWindow(width, height, "OpenGL Multiple Triangles", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -73,9 +70,31 @@ func main() {
 	}
 
 	program := initOpenGL()
+	generateTriangles(numTriangles)
 
 	for !window.ShouldClose() {
 		draw(window, program)
+	}
+}
+
+func generateTriangles(n int) {
+	vertices = make([]uint16, n*6) // 3 vertices per triangle, 2 coordinates per vertex
+	colors = make([]uint8, n*3)    // 1 color per triangle, 3 components per color
+
+	for i := 0; i < n; i++ {
+		// Generate random triangle vertices
+		for j := 0; j < 6; j++ {
+			if j%2 == 0 {
+				vertices[i*6+j] = uint16(rand.Intn(width))
+			} else {
+				vertices[i*6+j] = uint16(rand.Intn(height))
+			}
+		}
+
+		// Generate random color for the triangle
+		for j := 0; j < 3; j++ {
+			colors[i*3+j] = uint8(rand.Intn(256))
+		}
 	}
 }
 
@@ -117,15 +136,15 @@ func draw(window *glfw.Window, program uint32) {
 
 	colorUniform := gl.GetUniformLocation(program, gl.Str("uColor\x00"))
 
-	// Draw first triangle
-	color1 := []float32{float32(colors[0]) / 255.0, float32(colors[1]) / 255.0, float32(colors[2]) / 255.0}
-	gl.Uniform3fv(colorUniform, 1, &color1[0])
-	gl.DrawArrays(gl.TRIANGLES, 0, 3)
-
-	// Draw second triangle
-	color2 := []float32{float32(colors[3]) / 255.0, float32(colors[4]) / 255.0, float32(colors[5]) / 255.0}
-	gl.Uniform3fv(colorUniform, 1, &color2[0])
-	gl.DrawArrays(gl.TRIANGLES, 3, 3)
+	for i := 0; i < numTriangles; i++ {
+		color := []float32{
+			float32(colors[i*3]) / 255.0,
+			float32(colors[i*3+1]) / 255.0,
+			float32(colors[i*3+2]) / 255.0,
+		}
+		gl.Uniform3fv(colorUniform, 1, &color[0])
+		gl.DrawArrays(gl.TRIANGLES, int32(i*3), 3)
+	}
 
 	window.SwapBuffers()
 	glfw.PollEvents()
