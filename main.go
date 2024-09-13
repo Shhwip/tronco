@@ -11,14 +11,16 @@ import (
 )
 
 const (
-	width        = 1920
-	height       = 1080
-	numTriangles = 50 // Number of triangles to generate
+	width          = 1920
+	height         = 1080
+	numTriangles   = 50 // Number of triangles per scene
+	numScenes      = 50 // Number of scenes to generate
+	framesPerScene = 60 // Number of frames to display each scene (60 frames = 1 second at 60 FPS)
 )
 
 var (
-	vertices []uint16
-	colors   []uint8
+	vertices [][]uint16
+	colors   [][]uint8
 )
 
 var (
@@ -58,7 +60,7 @@ func main() {
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 
-	window, err := glfw.CreateWindow(width, height, "OpenGL Multiple Triangles", nil, nil)
+	window, err := glfw.CreateWindow(width, height, "OpenGL Multiple Scenes of Triangles", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -70,32 +72,63 @@ func main() {
 	}
 
 	program := initOpenGL()
-	generateTriangles(numTriangles)
+	generateScenes(numScenes, numTriangles)
+
+	vao, vbo := setupBuffers()
+
+	currentScene := 0
+	frameCount := 0
 
 	for !window.ShouldClose() {
-		draw(window, program)
+		draw(window, program, vao, vbo, currentScene)
+
+		frameCount++
+		if frameCount >= framesPerScene {
+			frameCount = 0
+			currentScene = (currentScene + 1) % numScenes
+		}
 	}
 }
 
-func generateTriangles(n int) {
-	vertices = make([]uint16, n*6) // 3 vertices per triangle, 2 coordinates per vertex
-	colors = make([]uint8, n*3)    // 1 color per triangle, 3 components per color
+func generateScenes(scenes, triangles int) {
+	vertices = make([][]uint16, scenes)
+	colors = make([][]uint8, scenes)
 
-	for i := 0; i < n; i++ {
-		// Generate random triangle vertices
-		for j := 0; j < 6; j++ {
-			if j%2 == 0 {
-				vertices[i*6+j] = uint16(rand.Intn(width))
-			} else {
-				vertices[i*6+j] = uint16(rand.Intn(height))
+	for s := 0; s < scenes; s++ {
+		vertices[s] = make([]uint16, triangles*6) // 3 vertices per triangle, 2 coordinates per vertex
+		colors[s] = make([]uint8, triangles*3)    // 1 color per triangle, 3 components per color
+
+		for i := 0; i < triangles; i++ {
+			// Generate random triangle vertices
+			for j := 0; j < 6; j++ {
+				if j%2 == 0 {
+					vertices[s][i*6+j] = uint16(rand.Intn(width))
+				} else {
+					vertices[s][i*6+j] = uint16(rand.Intn(height))
+				}
+			}
+
+			// Generate random color for the triangle
+			for j := 0; j < 3; j++ {
+				colors[s][i*3+j] = uint8(rand.Intn(256))
 			}
 		}
-
-		// Generate random color for the triangle
-		for j := 0; j < 3; j++ {
-			colors[i*3+j] = uint8(rand.Intn(256))
-		}
 	}
+}
+
+func setupBuffers() (uint32, uint32) {
+	var vao uint32
+	gl.GenVertexArrays(1, &vao)
+	gl.BindVertexArray(vao)
+
+	var vbo uint32
+	gl.GenBuffers(1, &vbo)
+	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+
+	gl.VertexAttribPointer(0, 2, gl.UNSIGNED_SHORT, false, 2*2, gl.PtrOffset(0))
+	gl.EnableVertexAttribArray(0)
+
+	return vao, vbo
 }
 
 func initOpenGL() uint32 {
@@ -117,30 +150,23 @@ func initOpenGL() uint32 {
 	return prog
 }
 
-func draw(window *glfw.Window, program uint32) {
+func draw(window *glfw.Window, program uint32, vao uint32, vbo uint32, scene int) {
 	gl.Clear(gl.COLOR_BUFFER_BIT)
 
 	gl.UseProgram(program)
-
-	var vao uint32
-	gl.GenVertexArrays(1, &vao)
 	gl.BindVertexArray(vao)
 
-	var vbo uint32
-	gl.GenBuffers(1, &vbo)
+	// Update buffer data for the current scene
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, 2*len(vertices), gl.Ptr(vertices), gl.STATIC_DRAW)
-
-	gl.VertexAttribPointer(0, 2, gl.UNSIGNED_SHORT, false, 2*2, gl.PtrOffset(0))
-	gl.EnableVertexAttribArray(0)
+	gl.BufferData(gl.ARRAY_BUFFER, 2*len(vertices[scene]), gl.Ptr(vertices[scene]), gl.STATIC_DRAW)
 
 	colorUniform := gl.GetUniformLocation(program, gl.Str("uColor\x00"))
 
 	for i := 0; i < numTriangles; i++ {
 		color := []float32{
-			float32(colors[i*3]) / 255.0,
-			float32(colors[i*3+1]) / 255.0,
-			float32(colors[i*3+2]) / 255.0,
+			float32(colors[scene][i*3]) / 255.0,
+			float32(colors[scene][i*3+1]) / 255.0,
+			float32(colors[scene][i*3+2]) / 255.0,
 		}
 		gl.Uniform3fv(colorUniform, 1, &color[0])
 		gl.DrawArrays(gl.TRIANGLES, int32(i*3), 3)
