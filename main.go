@@ -1,26 +1,101 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
-	"math/rand"
+	"io"
+	"os"
 	"runtime"
-	"time"
+	"strconv"
 
 	"github.com/go-gl/gl/v3.3-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
 
+type triangles struct {
+	points []uint16
+	colors []uint8
+	length uint16
+}
+
+func readData(folderPath string) ([]triangles, error) {
+	files, err := os.ReadDir(folderPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var triangles []triangles
+	for i, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		triangles = append(triangles, processFile(folderPath+"/"+strconv.FormatInt(int64(i+1), 10)+".bin"))
+	}
+
+	return triangles, nil
+
+}
+
+func processFile(filePath string) triangles {
+	file, err := os.Open(filePath)
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return triangles{}
+	}
+	defer file.Close()
+
+	length, nodes, colors, err := readBinaryData(file)
+
+	if err != nil {
+		fmt.Printf("Error reading binary data: %v\n", err)
+		return triangles{}
+	}
+
+	var tri triangles
+	tri.length = uint16(length)
+	tri.points = nodes
+	tri.colors = colors
+
+	return tri
+}
+
+func readBinaryData(r io.Reader) (length int, nodes []uint16, colors []byte, err error) {
+	// Read length (2 bytes, big-endian)
+	var lengthBytes [2]byte
+	if _, err := io.ReadFull(r, lengthBytes[:]); err != nil {
+		return 0, nil, nil, err
+	}
+	length = int(binary.BigEndian.Uint16(lengthBytes[:]))
+
+	// Read nodes
+	nodes = make([]uint16, length)
+	for i := 0; i < length; i++ {
+		var nodeBytes [2]byte
+		if _, err := io.ReadFull(r, nodeBytes[:]); err != nil {
+			return 0, nil, nil, err
+		}
+		nodes[i] = binary.BigEndian.Uint16(nodeBytes[:])
+	}
+
+	// Read colors
+	colorLength := length / 2
+	colors = make([]byte, colorLength)
+	if _, err := io.ReadFull(r, colors); err != nil {
+		return 0, nil, nil, err
+	}
+
+	return length, nodes, colors, nil
+}
+
 const (
 	width          = 1920
 	height         = 1080
-	numTriangles   = 50 // Number of triangles per scene
-	numScenes      = 50 // Number of scenes to generate
-	framesPerScene = 60 // Number of frames to display each scene (60 frames = 1 second at 60 FPS)
+	framesPerScene = 2 // Number of frames to display each scene (60 frames = 1 second at 60 FPS)
 )
 
 var (
-	vertices [][]uint16
-	colors   [][]uint8
+	tris []triangles
 )
 
 var (
@@ -46,7 +121,6 @@ var (
 
 func init() {
 	runtime.LockOSThread()
-	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
@@ -54,6 +128,20 @@ func main() {
 		panic(err)
 	}
 	defer glfw.Terminate()
+
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go <foldername>")
+		return
+	}
+
+	folderPath := os.Args[1]
+	var err error
+	tris, err = readData(folderPath)
+
+	if err != nil {
+		fmt.Printf("Error reading data: %v\n", err)
+		return
+	}
 
 	glfw.WindowHint(glfw.ContextVersionMajor, 3)
 	glfw.WindowHint(glfw.ContextVersionMinor, 3)
@@ -72,7 +160,6 @@ func main() {
 	}
 
 	program := initOpenGL()
-	generateScenes(numScenes, numTriangles)
 
 	vao, vbo := setupBuffers()
 
@@ -85,33 +172,7 @@ func main() {
 		frameCount++
 		if frameCount >= framesPerScene {
 			frameCount = 0
-			currentScene = (currentScene + 1) % numScenes
-		}
-	}
-}
-
-func generateScenes(scenes, triangles int) {
-	vertices = make([][]uint16, scenes)
-	colors = make([][]uint8, scenes)
-
-	for s := 0; s < scenes; s++ {
-		vertices[s] = make([]uint16, triangles*6) // 3 vertices per triangle, 2 coordinates per vertex
-		colors[s] = make([]uint8, triangles*3)    // 1 color per triangle, 3 components per color
-
-		for i := 0; i < triangles; i++ {
-			// Generate random triangle vertices
-			for j := 0; j < 6; j++ {
-				if j%2 == 0 {
-					vertices[s][i*6+j] = uint16(rand.Intn(width))
-				} else {
-					vertices[s][i*6+j] = uint16(rand.Intn(height))
-				}
-			}
-
-			// Generate random color for the triangle
-			for j := 0; j < 3; j++ {
-				colors[s][i*3+j] = uint8(rand.Intn(256))
-			}
+			currentScene = (currentScene + 1) % len(tris)
 		}
 	}
 }
@@ -158,15 +219,15 @@ func draw(window *glfw.Window, program uint32, vao uint32, vbo uint32, scene int
 
 	// Update buffer data for the current scene
 	gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-	gl.BufferData(gl.ARRAY_BUFFER, 2*len(vertices[scene]), gl.Ptr(vertices[scene]), gl.STATIC_DRAW)
+	gl.BufferData(gl.ARRAY_BUFFER, 2*len(tris[scene].points), gl.Ptr(tris[scene].points), gl.STATIC_DRAW)
 
 	colorUniform := gl.GetUniformLocation(program, gl.Str("uColor\x00"))
 
-	for i := 0; i < numTriangles; i++ {
+	for i := 0; i*3+2 < len(tris[scene].colors); i++ {
 		color := []float32{
-			float32(colors[scene][i*3]) / 255.0,
-			float32(colors[scene][i*3+1]) / 255.0,
-			float32(colors[scene][i*3+2]) / 255.0,
+			float32(tris[scene].colors[i*3]) / 255.0,
+			float32(tris[scene].colors[i*3+1]) / 255.0,
+			float32(tris[scene].colors[i*3+2]) / 255.0,
 		}
 		gl.Uniform3fv(colorUniform, 1, &color[0])
 		gl.DrawArrays(gl.TRIANGLES, int32(i*3), 3)
