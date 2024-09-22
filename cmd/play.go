@@ -29,8 +29,10 @@ func readData(folderPath string) ([]triangles, error) {
 		if file.IsDir() {
 			continue
 		}
-
-		triangles = append(triangles, processFile(folderPath+"/"+strconv.FormatInt(int64(i+1), 10)+".bin"))
+		if i == 0 {
+			continue
+		}
+		triangles = append(triangles, processFile(folderPath+"/"+"frame"+strconv.FormatInt(int64(i), 10)+".bin"))
 	}
 
 	return triangles, nil
@@ -67,6 +69,11 @@ func readBinaryData(r io.Reader) (length int, nodes []uint16, colors []byte, err
 		return 0, nil, nil, err
 	}
 	length = int(binary.BigEndian.Uint16(lengthBytes[:]))
+
+	if length == 0 {
+		err = fmt.Errorf("length is 0")
+		return 0, nil, nil, err
+	}
 
 	// Read nodes
 	nodes = make([]uint16, length)
@@ -123,18 +130,12 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func main() {
+func Play(folderPath string) {
 	if err := glfw.Init(); err != nil {
 		panic(err)
 	}
 	defer glfw.Terminate()
 
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <foldername>")
-		return
-	}
-
-	folderPath := os.Args[1]
 	var err error
 	tris, err = readData(folderPath)
 
