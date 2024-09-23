@@ -2,12 +2,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/shhwip/triangle/v2"
 )
 
 func main() {
@@ -39,7 +42,11 @@ func main() {
 
 	// Process images
 	fmt.Println("Processing images")
-	processImages(cacheDir, outFolder)
+	err := processImages(cacheDir, outFolder)
+	if err != nil {
+		fmt.Println("Error processing images:", err)
+		return
+	}
 
 	// Play video
 	fmt.Println("Playing video")
@@ -67,7 +74,7 @@ func convertToImages(videoFile, cacheDir, frameRate string) {
 	cmd.Run()
 }
 
-func processImages(cacheDir, outFolder string) {
+func processImages(cacheDir, outFolder string) error {
 	fmt.Println(filepath.Join(cacheDir, "*.jpg"))
 	files, _ := filepath.Glob(filepath.Join(cacheDir, "*.jpg"))
 	for _, file := range files {
@@ -76,12 +83,71 @@ func processImages(cacheDir, outFolder string) {
 		nameWithoutExt := strings.TrimSuffix(baseName, filepath.Ext(baseName))
 		outFile := filepath.Join(outFolder, nameWithoutExt+".bin")
 
-		cmd := exec.Command("./triangle/triangle", "-pts", "5000", "-in", file, "-out", outFile)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		fmt.Println(cmd.String())
-		cmd.Run()
+		proc := &triangle.Processor{
+			BlurRadius:      2,
+			SobelThreshold:  10,
+			PointsThreshold: 10,
+			PointRate:       0.075,
+			BlurFactor:      1,
+			EdgeFactor:      6,
+			MaxPoints:       5000,
+			Wireframe:       0,
+			Noise:           0,
+			StrokeWidth:     1,
+			IsStrokeSolid:   false,
+			Grayscale:       false,
+			ShowInBrowser:   false,
+			BgColor:         "",
+		}
+
+		tri := &triangle.Image{
+			Processor: *proc,
+		}
+
+		input, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		defer input.Close()
+
+		output, err := os.OpenFile(outFile, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return err
+		}
+		defer output.Close()
+
+		img, err := tri.DecodeImage(input)
+		if err != nil {
+			return err
+		}
+		nodes, colors, err := tri.Save(img, *proc)
+		if err != nil {
+			return err
+		}
+		length := len(nodes)
+		if length%6 != 0 {
+			fmt.Printf("Invalid number of nodes: %d\n", length)
+			return errors.New("invalid number of nodes")
+		}
+
+		outBytes := make([]byte, 0, length*2+len(colors)*3)
+		outBytes = append(outBytes, byte(length>>8), byte(length&0xff))
+		for _, node := range nodes {
+			outBytes = append(outBytes, byte(node>>8))
+			outBytes = append(outBytes, byte(node&0xff))
+		}
+		outBytes = append(outBytes, colors...)
+		if len(outBytes) != length*2+2+length/2 {
+			fmt.Printf("Invalid output length: %d\n", len(outBytes))
+			return errors.New("invalid output length")
+		}
+		// Save the triangulated image as a binary file.
+		_, err = output.Write(outBytes)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func removeContents(dir string) error {
