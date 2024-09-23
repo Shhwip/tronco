@@ -149,7 +149,7 @@ func Play(folderPath string) {
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 
-	window, err := glfw.CreateWindow(width, height, "OpenGL Multiple Scenes of Triangles", nil, nil)
+	window, err := glfw.CreateWindow(width, height, folderPath, nil, nil)
 	if err != nil {
 		panic(err)
 	}
