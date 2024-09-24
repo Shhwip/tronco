@@ -5,7 +5,7 @@ go 1.22.4
 require (
 	github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20240506104042-037f3cc74f2a
-	github.com/shhwip/triangle/v2 v2.0.0-20240922232337-91a6c26e8d43
+	github.com/shhwip/triangle/v2 v2.0.0-20240923074002-c7fd559790ae
 )
 
 require (
