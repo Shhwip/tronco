@@ -26,3 +26,5 @@ go.work.sum
 # video files
 *.mkv
 *.mp4
+# test folder
+test
