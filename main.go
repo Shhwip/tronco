@@ -1,4 +1,3 @@
-// this was a bash script that I converted to Go
 package main
 
 import (
