@@ -1,4 +1,4 @@
-module tronco
+module github.com/shhwip/tronco
 
 go 1.22.4
 
