@@ -96,9 +96,9 @@ func readBinaryData(r io.Reader) (length int, nodes []uint16, colors []byte, err
 }
 
 const (
-	width          = 1920
+	width          = 1920 // TODO: this needs to be changed based on video resolution
 	height         = 1080
-	framesPerScene = 2 // Number of frames to display each scene (60 frames = 1 second at 60 FPS)
+	framesPerScene = 2 // TODO: this needs to be changed to framerate
 )
 
 var (
@@ -170,6 +170,7 @@ func Play(folderPath string) {
 	for !window.ShouldClose() {
 		draw(window, program, vao, vbo, currentScene)
 
+		// TODO: this needs to be changed to a ms check with time
 		frameCount++
 		if frameCount >= framesPerScene {
 			frameCount = 0
@@ -224,6 +225,8 @@ func draw(window *glfw.Window, program uint32, vao uint32, vbo uint32, scene int
 
 	colorUniform := gl.GetUniformLocation(program, gl.Str("uColor\x00"))
 
+	// TODO: this is slow and shouldn't be here
+	// If you cant hit frame rate, move out of draw loop and into setup loop
 	for i := 0; i*3+2 < len(tris[scene].colors); i++ {
 		color := []float32{
 			float32(tris[scene].colors[i*3]) / 255.0,
