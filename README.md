@@ -29,4 +29,13 @@ You should keep in mind that this needs at least 20 times the storage space of t
 
 ## Examples
 
+before:
+
+https://github.com/user-attachments/assets/03d77627-915f-45f1-a223-4f8cd7c1f3e0
+
+after:
+
+https://github.com/user-attachments/assets/540eccaf-101f-4bfb-9edd-8a3fc0c68807
+
+
 
