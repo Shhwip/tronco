@@ -11,8 +11,8 @@ A lossy video encoder that "compresses" video using delaunay triangulation.
 
 ## Requirements
 
-- ffmpeg
-- go
+- [ffmpeg](https://www.ffmpeg.org/download.html)
+- [go](https://go.dev/doc/install)
 
 ## Installation
 
@@ -29,9 +29,6 @@ You should keep in mind that this needs at least 20 times the storage space of t
 
 ## Examples
 
-before:
-
-https://github.com/user-attachments/assets/03d77627-915f-45f1-a223-4f8cd7c1f3e0
 
 after:
 
