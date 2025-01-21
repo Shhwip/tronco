@@ -96,13 +96,15 @@ func readBinaryData(r io.Reader) (length int, nodes []uint16, colors []byte, err
 }
 
 const (
-	width          = 1920 // TODO: this needs to be changed based on video resolution
-	height         = 1080
 	framesPerScene = 2 // TODO: this needs to be changed to framerate
 )
 
 var (
-	tris []triangles
+	tris           []triangles
+	windowWidth    int
+	windowHeight   int
+	halfWidth     float32
+	halfHeight    float32
 )
 
 var (
@@ -110,9 +112,10 @@ var (
 		#version 330 core
 		layout (location = 0) in vec2 aPos;
 		uniform vec3 uColor;
+		uniform vec2 uHalfDimensions;
 		out vec3 ourColor;
 		void main() {
-			gl_Position = vec4(aPos.x / 960.0 - 1.0, 1.0 - aPos.y / 540.0, 0.0, 1.0);
+			gl_Position = vec4(aPos.x / uHalfDimensions.x - 1.0, 1.0 - aPos.y / uHalfDimensions.y, 0.0, 1.0);
 			ourColor = uColor;
 		}
 	` + "\x00"
@@ -130,7 +133,7 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func Play(folderPath string) {
+func Play(folderPath string, width int, height int) {
 	if err := glfw.Init(); err != nil {
 		panic(err)
 	}
@@ -149,7 +152,12 @@ func Play(folderPath string) {
 	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
 	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
 
-	window, err := glfw.CreateWindow(width, height, folderPath, nil, nil)
+	windowWidth = width
+	windowHeight = height
+	halfWidth = float32(width) / 2.0
+	halfHeight = float32(height) / 2.0
+
+	window, err := glfw.CreateWindow(windowWidth, windowHeight, folderPath, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -224,6 +232,8 @@ func draw(window *glfw.Window, program uint32, vao uint32, vbo uint32, scene int
 	gl.BufferData(gl.ARRAY_BUFFER, 2*len(tris[scene].points), gl.Ptr(tris[scene].points), gl.STATIC_DRAW)
 
 	colorUniform := gl.GetUniformLocation(program, gl.Str("uColor\x00"))
+	dimensionsUniform := gl.GetUniformLocation(program, gl.Str("uHalfDimensions\x00"))
+	gl.Uniform2f(dimensionsUniform, halfWidth, halfHeight)
 
 	// TODO: this is slow and shouldn't be here
 	// If you cant hit frame rate, move out of draw loop and into setup loop
