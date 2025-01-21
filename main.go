@@ -46,9 +46,15 @@ func main() {
 	fmt.Println("Clearing cache folder")
 	removeContents(cacheDir)
 
-	// Get frame rate
-	fmt.Println("Getting frame rate")
-	frameRate := getFrameRate(videoFile)
+	// Get video information
+	fmt.Println("Getting video information")
+	frameRate, width, height, err := getVideoInfo(videoFile)
+	if err != nil {
+		fmt.Println("Error getting video info:", err)
+		return
+	}
+
+	fmt.Printf("Video info: %dx%d @ %s fps\n", width, height, frameRate)
 
 	// Convert video to images
 	fmt.Println("Converting video to images")
@@ -64,19 +70,46 @@ func main() {
 
 	// Play video
 	fmt.Println("Playing video")
-	Play(outFolder)
+	Play(outFolder, width, height)
 }
 
-func getFrameRate(videoFile string) string {
+func getVideoInfo(videoFile string) (string, int, int, error) {
 	cmd := exec.Command("ffmpeg", "-i", videoFile)
 	output, _ := cmd.CombinedOutput()
+	outputStr := string(output)
 
-	re := regexp.MustCompile(`, (\d+(?:\.\d+)?) fps`)
-	matches := re.FindStringSubmatch(string(output))
-	if len(matches) > 1 {
-		return matches[1]
+	// Get frame rate
+	fpsRe := regexp.MustCompile(`, (\d+(?:\.\d+)?) fps`)
+	fpsMatches := fpsRe.FindStringSubmatch(outputStr)
+	frameRate := "24" // default frame rate
+	if len(fpsMatches) > 1 {
+		frameRate = fpsMatches[1]
 	}
-	return "24" // default frame rate
+
+	// Get dimensions
+	dimRe := regexp.MustCompile(`(\d{2,5})x(\d{2,5})`)
+	dimMatches := dimRe.FindStringSubmatch(outputStr)
+	if len(dimMatches) != 3 {
+		return "", 0, 0, fmt.Errorf("could not determine video dimensions")
+	}
+
+	width, err := strconv.Atoi(dimMatches[1])
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("invalid width: %v", err)
+	}
+
+	height, err := strconv.Atoi(dimMatches[2])
+	if err != nil {
+		return "", 0, 0, fmt.Errorf("invalid height: %v", err)
+	}
+
+	// Check for maximum dimensions
+	maxDim := 65536 // 2^16
+	if width > maxDim || height > maxDim {
+		return "", 0, 0, fmt.Errorf("video dimensions too large (max %dx%d)", maxDim, maxDim)
+	}
+
+	return frameRate, width, height, nil
 }
 
 func convertToImages(videoFile, cacheDir, frameRate string) {
